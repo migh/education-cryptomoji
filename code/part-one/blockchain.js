@@ -48,6 +48,8 @@ class Block {
   constructor(transactions, previousHash) {
     this.transactions = transactions;
     this.previousHash = previousHash;
+    this.nonce = 435345;
+    this.calculateHash(this.nonce);
   }
 
   /**
@@ -60,14 +62,23 @@ class Block {
    *   properties change.
    */
   calculateHash(nonce) {
-    this.nonce = nonce;
     const serializedTransactions = this.transactions.map( txn => {
       return txn.source + txn.recipient + txn.amount + txn.signature;
     });
 
     const hash = createHash('sha512').update(serializedTransactions + this.previousHash + nonce);
-
+    this.nonce = nonce;
     this.hash = hash.digest('hex');
+    return this.hash;
+  }
+  
+  verifyHash() {
+    const serializedTransactions = this.transactions.map( txn => {
+      return txn.source + txn.recipient + txn.amount + txn.signature;
+    });
+
+    const hash = createHash('sha512').update(serializedTransactions + this.previousHash + this.nonce);
+    return hash.digest('hex');
   }
 }
 

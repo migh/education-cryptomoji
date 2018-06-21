@@ -11,8 +11,8 @@ const signing = require('./signing');
  *   - have been modified since signing
  */
 const isValidTransaction = transaction => {
-  // Enter your solution here
-
+  if (transaction.amount < 0) return false;
+  return signing.verify(transaction.source, transaction.source + transaction.recipient + transaction.amount, transaction.signature);
 };
 
 /**
@@ -22,8 +22,9 @@ const isValidTransaction = transaction => {
  *   - they contain any invalid transactions
  */
 const isValidBlock = block => {
-  // Your code here
-
+  const transactionValidity = !block.transactions.map( txn => isValidTransaction(txn)).includes(false);
+  const blockValidity = (block.verifyHash() === block.hash);
+  return transactionValidity && blockValidity;
 };
 
 /**
@@ -37,8 +38,19 @@ const isValidBlock = block => {
  *   - contains any invalid transactions
  */
 const isValidChain = blockchain => {
-  // Your code here
+  const genesis = blockchain.blocks[0];
+  const tail = blockchain.blocks.slice(1);
+  const hashes = blockchain.blocks.map( block => block.hash );
+  const pHashes = blockchain.blocks.map( block => block.previousHash );
+  const notNullHash = !hashes.includes(null);
+  const validBlocks = !blockchain.blocks.map( block => isValidBlock(block)).includes(false);
 
+  if (genesis.previousHash !== null || genesis.transactions.length !== 0) return false;
+
+  const matchingHashes = !hashes.slice(0, hashes.length-1)
+    .map( (hash, index) => (hash === pHashes[index + 1])).includes(false);
+
+  return notNullHash && validBlocks && matchingHashes;
 };
 
 /**
@@ -47,8 +59,13 @@ const isValidChain = blockchain => {
  * (in theory) make the blockchain fail later validation checks;
  */
 const breakChain = blockchain => {
-  // Your code here
-
+  const myKey = signing.getPublicKey(signing.createPrivateKey());
+  blockchain.blocks.map( block => {
+    block.nonce = Math.floor( Math.random() * 10000 % 558);
+    block.transactions.map( txn => {
+      txn.recipient = myKey;
+    });
+  });
 };
 
 module.exports = {
