@@ -22,8 +22,10 @@ class Transaction {
    *     other properties, signed with the provided private key
    */
   constructor(privateKey, recipient, amount) {
-    // Enter your solution here
-
+    this.source = signing.getPublicKey(privateKey); 
+    this.recipient = recipient;
+    this.amount = amount;
+    this.signature = signing.sign(privateKey, this.source + recipient + amount)
   }
 }
 
@@ -44,8 +46,8 @@ class Block {
    *   - hash: a unique hash string generated from the other properties
    */
   constructor(transactions, previousHash) {
-    // Your code here
-
+    this.transactions = transactions;
+    this.previousHash = previousHash;
   }
 
   /**
@@ -58,8 +60,14 @@ class Block {
    *   properties change.
    */
   calculateHash(nonce) {
-    // Your code here
+    this.nonce = nonce;
+    const serializedTransactions = this.transactions.map( txn => {
+      return txn.source + txn.recipient + txn.amount + txn.signature;
+    });
 
+    const hash = createHash('sha512').update(serializedTransactions + this.previousHash + nonce);
+
+    this.hash = hash.digest('hex');
   }
 }
 
@@ -78,16 +86,15 @@ class Blockchain {
    *   - blocks: an array of blocks, starting with one genesis block
    */
   constructor() {
-    // Your code here
-
+    const genesisBlock = new Block([], null);
+    this.blocks = [ genesisBlock ];
   }
 
   /**
    * Simply returns the last block added to the chain.
    */
   getHeadBlock() {
-    // Your code here
-
+    return this.blocks[this.blocks.length -1];
   }
 
   /**
@@ -95,8 +102,9 @@ class Blockchain {
    * adding it to the chain.
    */
   addBlock(transactions) {
-    // Your code here
-
+    const newBlock = new Block(transactions, this.getHeadBlock().hash);
+    newBlock.calculateHash(0);
+    this.blocks.push(newBlock);
   }
 
   /**
@@ -109,8 +117,13 @@ class Blockchain {
    *   we make the blockchain mineable later.
    */
   getBalance(publicKey) {
-    // Your code here
-
+    return this.blocks.map( block => block.transactions )
+      .reduce( (acc, blckTnxs) => (acc.concat(blckTnxs)), [])
+      .filter( txn => (txn.recipient === publicKey || txn.source === publicKey) )
+      .reduce( (acc, txn) => {
+        if (txn.source === publicKey) return acc - txn.amount;
+        return acc  + txn.amount;
+      }, 0);
   }
 }
 
