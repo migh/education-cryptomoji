@@ -14,8 +14,7 @@ const { randomBytes, createHash } = require('crypto');
  *   // 'e291df3eede7f0c520fddbe5e9e53434ff7ef3c0894ed9d9cbcb6596f1cfe87e'
  */
 const createPrivateKey = () => {
-  // Enter your solution here
-
+  return randomBytes(32).toString('hex');
 };
 
 /**
@@ -32,8 +31,7 @@ const createPrivateKey = () => {
  *   not hex strings! You'll have to convert the private key.
  */
 const getPublicKey = privateKey => {
-  // Your code here
-
+  return secp256k1.publicKeyCreate(Buffer.from(privateKey, 'hex')).toString('hex');
 };
 
 /**
@@ -50,8 +48,9 @@ const getPublicKey = privateKey => {
  *   not the message itself!
  */
 const sign = (privateKey, message) => {
-  // Your code here
-
+  const hash = createHash('sha256').update(message);
+  const msg = hash.digest().slice(0,32);
+  return secp256k1.sign(msg, Buffer.from(privateKey, 'hex')).signature.toString('hex');
 };
 
 /**
@@ -65,8 +64,9 @@ const sign = (privateKey, message) => {
  *   // false
  */
 const verify = (publicKey, message, signature) => {
-  // Your code here
-
+  const hash = createHash('sha256').update(message);
+  const msg = hash.digest().slice(0,32);
+  return secp256k1.verify(msg, Buffer.from(signature, 'hex'), Buffer.from(publicKey, 'hex'));
 };
 
 module.exports = {
