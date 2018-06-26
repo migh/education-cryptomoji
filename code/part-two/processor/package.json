@@ -18,6 +18,8 @@
   },
   "homepage": "https://github.com/hyperledger/education-cryptomoji#readme",
   "dependencies": {
+    "bluebird": "^3.5.1",
+    "protobufjs": "~6.8.6",
     "sawtooth-sdk": "^1.0.1"
   },
   "devDependencies": {
