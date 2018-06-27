@@ -19,7 +19,12 @@ const ERROR = {
   UNKNOWN_ERROR: 'Unknown error.',
   UNKNOWN_ACTION: 'The action is not recognized',
   POORLY_ENCODED: 'The payload was poorly encoded.',
-  ADDRESS_ALREADY_USED: 'The user already have a collection.'
+  ADDRESS_ALREADY_USED: 'The user already have a collection.',
+  MOJI_DOES_NOT_EXIST: 'The selected moji does not exist.',
+  USER_DOES_NOT_HAVE_COLLECTION: 'The user does not have a collection.',
+  USER_IS_NOT_OWNER: 'The user is not the owner of the asset.',
+  SIRE_NOT_LISTED: 'The selected sire is not listed as such.',
+  SIRE_DOES_NOT_COINCIDE: 'The selected moji is not the sire for the given collection.'
 };
 /**
  * A Cryptomoji specific version of a Hyperledger Sawtooth Transaction Handler.
@@ -62,7 +67,7 @@ class MojiHandler extends TransactionHandler {
     try {
       const payload = JSON.parse( txn.payload.toString() );
       if ( ACTIONS[payload.action] ) {
-        return ACTIONS[payload.action](txn, context);
+        return ACTIONS[payload.action](txn, context, payload);
       } else throw new InvalidTransaction(ERROR.UNKNOWN_ACTION);
 
     } catch(err) {
@@ -79,7 +84,8 @@ function createCollection(txn, ctx) {
   const owner = txn.header.signerPublicKey;
   const collectionAddr = getCollectionAddress(owner);
 
-  return ctx.getState([collectionAddr]).then( state => {
+  return ctx.getState([collectionAddr])
+  .then( state => {
     if (state[collectionAddr].length > 0) {
       throw new InvalidTransaction(ERROR.ADDRESS_ALREADY_USED);
     }
@@ -103,12 +109,97 @@ function createCollection(txn, ctx) {
   });
 }
 
-function selectSire(txn, ctx) {
-  return Promise.resolve('ss');
+function selectSire(txn, ctx, payload) {
+  const owner = txn.header.signerPublicKey;
+  const collectionAddress = getCollectionAddress(owner);
+  return ctx.getState([ payload.sire, collectionAddress ])
+  .then( state => {
+    if ( state[payload.sire].length === 0 ) {
+      throw new InvalidTransaction(ERROR.MOJI_DOES_NOT_EXIST);
+    }
+
+    if ( state[collectionAddress].length === 0 ) {
+      throw new InvalidTransaction(ERROR.USER_DOES_NOT_HAVE_COLLECTION);
+    }
+
+    if ( JSON.parse(state[payload.sire]).owner !== owner ) {
+      throw new InvalidTransaction(ERROR.USER_IS_NOT_OWNER);
+    }
+  
+    return ctx.setState(
+      { [getSireAddress(owner)]: JSON.stringify(new Sire(owner, payload.sire)) }
+    );
+  })
+  .catch( err => {
+    throw err;
+  });
 }
 
-function breedMoji(txn, ctx) {
-  return Promise.resolve('bm');
+function breedMoji(txn, ctx, payload) {
+  const owner = txn.header.signerPublicKey;
+  const collectionAddress = getCollectionAddress(owner);
+  return ctx.getState([ payload.sire, payload.breeder, collectionAddress ])
+  .then( state => {
+    if ( state[payload.sire].length === 0 || state[payload.breeder].length === 0 ) {
+      throw new InvalidTransaction(ERROR.MOJI_DOES_NOT_EXIST);
+    }
+
+    if ( state[collectionAddress].length === 0 ) {
+      throw new InvalidTransaction(ERROR.USER_DOES_NOT_HAVE_COLLECTION);
+    }
+
+    if ( JSON.parse(state[payload.breeder]).owner !== owner ) {
+      throw new InvalidTransaction(ERROR.USER_IS_NOT_OWNER);
+    }
+
+    const breederCollection = JSON.parse( state[collectionAddress] );
+    const sire = JSON.parse( state[payload.sire] );
+    const breeder = JSON.parse( state[payload.breeder] );
+
+    return Promise.all([ 
+      { breederCollection, sire, breeder },
+      ctx.getState([ getSireAddress(sire.owner) ])
+    ]);
+  })
+  .then( data => {
+    const { breederCollection, sire, breeder } = data[0];
+
+    if ( data[1][getSireAddress(sire.owner)].length === 0 ) {
+      throw new InvalidTransaction(ERROR.SIRE_NOT_LISTED);
+    }
+
+    const sireByOwner = JSON.parse( data[1][getSireAddress(sire.owner)] );
+
+    if ( sireByOwner.sire !== payload.sire ) {
+      throw new InvalidTransaction(ERROR.SIRE_DOES_NOT_COINCIDE);
+    }
+
+    const newState = {};
+    sire.address = payload.sire;
+    breeder.address = payload.breeder;
+
+    // Create new moji
+    const child = new Cryptomoji(owner, { breeder, sire });
+    const childAddress = getMojiAddress(owner, child.dna);
+    newState[childAddress] = JSON.stringify( child );
+    
+    // Update Breeder
+    breeder.bred.push( childAddress );
+    newState[breeder.address] = JSON.stringify( breeder );
+
+    // Update Sire
+    sire.sired.push( childAddress );
+    newState[sire.address] = JSON.stringify( sire );
+
+    // Update Collection
+    breederCollection.moji.push(childAddress);
+    newState[collectionAddress] = JSON.stringify( breederCollection );
+ 
+    return ctx.setState( newState );
+  })
+  .catch( err => {
+    throw err;
+  });
 }
 
 module.exports = MojiHandler;
